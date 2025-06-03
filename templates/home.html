@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Daftar Produk</title>
+</head>
+<body>
+    <h1>Daftar Produk</h1>
+
+    <form action="/produk/tambah" method="POST">
+        <h3>Tambah Produk Baru</h3>
+        <input type="text" name="nama_produk" placeholder="Nama Produk" required>
+        <input type="number" step="0.01" name="harga" placeholder="Harga" required>
+        <button type="submit">Tambah</button>
+    </form>
+
+    <br>
+
+    <table border="1" cellpadding="8">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nama Produk</th>
+                <th>Harga</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .produks }}
+                <tr>
+                    <form action="/produk/edit" method="POST">
+                        <td>{{ .ID }}<input type="hidden" name="id" value="{{ .ID }}"></td>
+                        <td><input type="text" name="nama_produk" value="{{ .NamaProduk }}"></td>
+                        <td><input type="number" step="0.01" name="harga" value="{{ .Harga }}"></td>
+                        <td>
+                            <button type="submit">Edit</button>
+                            <a href="/produk/hapus/{{ .ID }}" onclick="return confirm('Hapus produk ini?')">Hapus</a>
+                        </td>
+                    </form>
+                </tr>
+            {{ else }}
+                <tr><td colspan="4">Tidak ada produk</td></tr>
+            {{ end }}
+        </tbody>
+    </table>
+</body>
+</html>
