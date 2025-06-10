@@ -4,6 +4,7 @@ import (
 	"database/sql" // Untuk koneksi dan operasi database SQL
 	"log"          // Untuk mencetak log error atau informasi
 	"net/http"     // Untuk konstanta dan fungsi HTTP
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"         // Framework web Gin
 	_ "github.com/go-sql-driver/mysql" // Driver MySQL untuk Go, underscore berarti hanya untuk efek samping (init)
@@ -56,51 +57,79 @@ func LoginHandler(c *gin.Context) {
 
 // Handler untuk menampilkan halaman home beserta data produk
 func HomePage(c *gin.Context) {
-	// Query semua produk dari tabel
-	rows, err := db.Query("SELECT id, nama_produk, harga FROM produk")
+	// Query semua produk dari tabel (tambahkan kolom gambar)
+	rows, err := db.Query("SELECT id, nama_produk, harga, gambar FROM produk")
 	if err != nil {
 		log.Println("Error fetching produk:", err)
 		c.HTML(http.StatusInternalServerError, "home.html", gin.H{"error": "Gagal mengambil data produk"})
 		return
 	}
-	defer rows.Close() // Tutup rows setelah selesai
+	defer rows.Close()
 
 	// Struct lokal untuk menyimpan data produk
 	type Produk struct {
 		ID         int
 		NamaProduk string
 		Harga      float64
+		Gambar     string
 	}
 
-	var produks []Produk // Slice untuk menampung semua produk
+	var produks []Produk
 
 	for rows.Next() {
 		var p Produk
-		// Pindahkan data dari hasil query ke struct
-		if err := rows.Scan(&p.ID, &p.NamaProduk, &p.Harga); err != nil {
+		// Scan ke semua kolom termasuk gambar
+		if err := rows.Scan(&p.ID, &p.NamaProduk, &p.Harga, &p.Gambar); err != nil {
 			log.Println("Error scanning produk:", err)
-			continue // Lewatkan baris jika error
+			continue
 		}
-		produks = append(produks, p) // Tambahkan ke slice
+		produks = append(produks, p)
 	}
 
-	// Kirim data ke template home.html
-	c.HTML(http.StatusOK, "home.html", gin.H{"produks": produks})
+	var jumlahProduk int
+	err = db.QueryRow("SELECT COUNT(*) FROM produk").Scan(&jumlahProduk)
+	if err != nil {
+		log.Println("Error menghitung jumlah produk:", err)
+		jumlahProduk = 0 // fallback
+	}
+
+	// Kirim data ke template
+	c.HTML(http.StatusOK, "home.html", gin.H{
+		"produks": produks,
+		"jumlah1": jumlahProduk,
+	})
 }
 
 // Handler untuk menambahkan produk baru
 func TambahProduk(c *gin.Context) {
-	// Ambil data dari form tambah produk
+	// Ambil data dari form
 	nama := c.PostForm("nama_produk")
 	harga := c.PostForm("harga")
 
-	// Masukkan ke database
-	_, err := db.Exec("INSERT INTO produk (nama_produk, harga) VALUES (?, ?)", nama, harga)
+	// Ambil file gambar
+	file, err := c.FormFile("gambar")
+	if err != nil {
+		log.Println("Gagal mengambil file gambar:", err)
+		c.String(http.StatusBadRequest, "Gagal upload gambar")
+		return
+	}
+
+	// Simpan file ke folder "uploads"
+	filename := filepath.Base(file.Filename)
+	path := filepath.Join("uploads", filename) // Pastikan folder "uploads" sudah ada
+	if err := c.SaveUploadedFile(file, path); err != nil {
+		log.Println("Gagal menyimpan file:", err)
+		c.String(http.StatusInternalServerError, "Gagal menyimpan gambar")
+		return
+	}
+
+	// Simpan data ke database (misalnya dengan nama file gambar)
+	_, err = db.Exec("INSERT INTO produk (nama_produk, harga, gambar) VALUES (?, ?, ?)", nama, harga, filename)
 	if err != nil {
 		log.Println("Error inserting produk:", err)
 	}
 
-	// Redirect kembali ke halaman home
+	// Redirect ke halaman home
 	c.Redirect(http.StatusFound, "/home")
 }
 
